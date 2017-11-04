@@ -1,0 +1,51 @@
+- name: ruby environment for octopress
+  hosts: all
+  vars:
+    ruby_version: "2.3.1"
+    rbenv_home: "{{ ansible_env.HOME}}/.rbenv"
+    bash_profile_path: "{{ ansible_env.HOME }}/.bash_profile"
+  tasks:
+    - name: install packages
+      apt: pkg={{ item }} update_cache=yes cache_valid_time=3600
+      become: True
+      with_items:
+        - git
+        - libssl-dev
+        - libreadline-dev
+        - zlib1g-dev
+        - vim
+    - name: git checkout rbenv
+      git:
+        repo: "https://github.com/rbenv/rbenv.git"
+        dest: "{{ rbenv_home }}"
+    - name: make sure ~/.bash_profile exists
+      file:
+        path: "{{ bash_profile_path }}"
+        state: touch
+    - name: add PATH for rbenv to ~/.bash_profile
+      lineinfile:
+        path: "{{ bash_profile_path }}"
+        line: 'export PATH="$HOME/.rbenv/bin:$PATH"'
+    - name: add rbenv init to ~/.bash_profile
+      lineinfile:
+        path: "{{ bash_profile_path }}"
+        line: 'eval "$(rbenv init -)"'
+    - name: git checkout ruby-build
+      git:
+        repo: "https://github.com/rbenv/ruby-build.git"
+        dest: "{{ rbenv_home }}/plugins/ruby-build"
+    - name: check if ruby {{ ruby_version }} is installed via rbenv
+      shell: /bin/bash -cl "rbenv versions"
+      register: result
+    - name: install ruby {{ ruby_version }} via rbenv if not installed
+      shell: /bin/bash -cl "RUBY_CONFIGURE_OPTS=--disable-install-doc rbenv install {{ ruby_version }}"
+      when: "ruby_version not in result.stdout"
+    - name: set ruby {{ ruby_version }} as global
+      shell: /bin/bash -cl "rbenv global {{ ruby_version }} && rbenv rehash"
+    - name: install bundler
+      gem:
+        name: bundler
+        state: latest
+        executable: "{{ rbenv_home }}/shims/gem"
+        user_install: False
+
